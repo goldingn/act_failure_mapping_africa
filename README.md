@@ -195,7 +195,28 @@ Simulate and plot some synthetic data
 
 ``` r
 library(tidyverse)
+#> Warning: package 'ggplot2' was built under R version 4.2.3
+#> Warning: package 'tidyr' was built under R version 4.2.3
+#> Warning: package 'dplyr' was built under R version 4.2.3
+#> ── Attaching core tidyverse packages ──────────────────────── tidyverse 2.0.0 ──
+#> ✔ dplyr     1.1.4     ✔ readr     2.1.4
+#> ✔ forcats   1.0.0     ✔ stringr   1.5.0
+#> ✔ ggplot2   3.5.0     ✔ tibble    3.2.1
+#> ✔ lubridate 1.9.2     ✔ tidyr     1.3.1
+#> ✔ purrr     1.0.2     
+#> ── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
+#> ✖ dplyr::filter() masks stats::filter()
+#> ✖ dplyr::lag()    masks stats::lag()
+#> ℹ Use the conflicted package (<http://conflicted.r-lib.org/>) to force all conflicts to become errors
 library(terra)
+#> Warning: package 'terra' was built under R version 4.2.3
+#> terra 1.7.71
+#> 
+#> Attaching package: 'terra'
+#> 
+#> The following object is masked from 'package:tidyr':
+#> 
+#>     extract
 sims <- sim_dataset()
 #> ℹ Initialising python and checking dependencies, this may take a moment.✔ Initialising python and checking dependencies ... done!               
 
@@ -244,3 +265,151 @@ sims$data$snp_data %>%
 ```
 
 ![](README_files/figure-gfm/sim-dataset-3.png)<!-- -->
+
+``` r
+# fit the model to these data with greta
+library(greta)
+#> 
+#> Attaching package: 'greta'
+#> The following object is masked from 'package:dplyr':
+#> 
+#>     slice
+#> The following objects are masked from 'package:stats':
+#> 
+#>     binomial, cov2cor, poisson
+#> The following objects are masked from 'package:base':
+#> 
+#>     %*%, apply, backsolve, beta, chol2inv, colMeans, colSums, diag,
+#>     eigen, forwardsolve, gamma, identity, rowMeans, rowSums, sweep,
+#>     tapply
+library(greta.gp)
+#> 
+#> Attaching package: 'greta.gp'
+#> The following object is masked from 'package:terra':
+#> 
+#>     project
+
+# get data and dimensions
+covariates <- sims$data$covariates
+tf_data <- sims$data$tf_data
+snp_data <- sims$data$snp_data
+n_snp <- n_distinct(snp_data$snp)
+n_latent <- terra::nlyr(sims$truth$latent_factors)
+
+# coordinates for two datasets combined
+coords <- sims$data$all_coords %>%
+  select(x, y) %>%
+  as.matrix()
+
+# define model parameters
+parameters <- define_greta_parameters(n_snp = n_snp,
+                                      n_latent = n_latent)
+
+# define Gaussian process for latent factors over SNP and TF locations
+
+# matern 5/2 isotropic kernel
+kernel_lengthscale <- normal(14, 1, truncation = c(0, Inf))
+kernel_sd <- normal(0, 1, truncation = c(0, Inf))
+kernel <- mat52(lengthscales = c(kernel_lengthscale, kernel_lengthscale),
+                variance = kernel_sd ^ 2)
+
+# define knots for reduced-rank GP approximation
+kmn <- kmeans(coords, centers = 25)
+
+# define GPs over spatial latent factors, evaluated at all data locations
+latents_obs <- gp(x = coords,
+                  kernel = kernel,
+                  inducing = kmn$centers,
+                  n = n_latent)
+
+# extract out the design matrices (pre-scaled)
+X_obs <- build_design_matrix(covariates, coords)
+
+# combine these with parameters to get matrices SNP frequencies at the SNP data locations
+snp_freq_logit_obs <- X_obs %*% t(parameters$beta) +
+  t(parameters$loadings %*% t(latents_obs))
+snp_freq_obs <- ilogit(snp_freq_logit_obs)
+
+# map from SNPs to Treatment Failure frequencies at these locations
+prob_fail_obs <- sweep(snp_freq_obs,
+                       MARGIN = 2,
+                       STATS = parameters$q,
+                       FUN = "*") 
+tf_freq_obs <- 1 - apply(1 - prob_fail_obs,
+                         MARGIN = 1,
+                         FUN = "prod")
+
+# define the likelihood over the SNPs
+snp_data_index <- cbind(snp_data$coord_id, snp_data$snp_id)
+distribution(snp_data$positive) <- greta::binomial(size = snp_data$tested,
+                                                   prob = snp_freq_obs[snp_data_index])
+
+# and define the likelihood over the TF
+tf_data_index <- tf_data$coord_id
+distribution(tf_data$failed) <- greta::binomial(size = tf_data$treated,
+                                                prob = tf_freq_obs[tf_data_index])
+
+# fit the model
+q <- parameters$q
+beta <- parameters$beta
+m <- model(kernel_lengthscale, kernel_sd, q, beta)
+draws <- mcmc(m)
+#> running 4 chains simultaneously on up to 8 CPU cores
+#> 
+#>     warmup                                           0/1000 | eta:  ?s              warmup ==                                       50/1000 | eta:  1m              warmup ====                                    100/1000 | eta:  1m              warmup ======                                  150/1000 | eta: 40s              warmup ========                                200/1000 | eta: 34s              warmup ==========                              250/1000 | eta: 29s              warmup ===========                             300/1000 | eta: 26s              warmup =============                           350/1000 | eta: 23s              warmup ===============                         400/1000 | eta: 20s              warmup =================                       450/1000 | eta: 18s | <1% bad    warmup ===================                     500/1000 | eta: 16s | <1% bad    warmup =====================                   550/1000 | eta: 14s | <1% bad    warmup =======================                 600/1000 | eta: 13s | <1% bad    warmup =========================               650/1000 | eta: 11s | <1% bad    warmup ===========================             700/1000 | eta:  9s | <1% bad    warmup ============================            750/1000 | eta:  8s | <1% bad    warmup ==============================          800/1000 | eta:  6s | <1% bad    warmup ================================        850/1000 | eta:  5s | <1% bad    warmup ==================================      900/1000 | eta:  3s | <1% bad    warmup ====================================    950/1000 | eta:  1s | <1% bad    warmup ====================================== 1000/1000 | eta:  0s | <1% bad
+#>   sampling                                           0/1000 | eta:  ?s            sampling ==                                       50/1000 | eta: 18s            sampling ====                                    100/1000 | eta: 19s            sampling ======                                  150/1000 | eta: 23s            sampling ========                                200/1000 | eta: 22s            sampling ==========                              250/1000 | eta: 20s            sampling ===========                             300/1000 | eta: 19s            sampling =============                           350/1000 | eta: 17s            sampling ===============                         400/1000 | eta: 17s            sampling =================                       450/1000 | eta: 15s            sampling ===================                     500/1000 | eta: 13s            sampling =====================                   550/1000 | eta: 12s            sampling =======================                 600/1000 | eta: 10s            sampling =========================               650/1000 | eta:  9s            sampling ===========================             700/1000 | eta:  8s            sampling ============================            750/1000 | eta:  7s            sampling ==============================          800/1000 | eta:  5s            sampling ================================        850/1000 | eta:  4s            sampling ==================================      900/1000 | eta:  3s            sampling ====================================    950/1000 | eta:  1s            sampling ====================================== 1000/1000 | eta:  0s
+
+# check convergence is not too horrible
+r_hats <- coda::gelman.diag(draws,
+                            autoburnin = FALSE,
+                            multivariate = FALSE)
+summary(r_hats$psrf)
+#>    Point est.      Upper C.I.   
+#>  Min.   :1.003   Min.   :1.010  
+#>  1st Qu.:1.039   1st Qu.:1.111  
+#>  Median :1.107   Median :1.282  
+#>  Mean   :1.284   Mean   :1.689  
+#>  3rd Qu.:1.481   3rd Qu.:2.189  
+#>  Max.   :2.041   Max.   :3.631
+
+# make posterior prediction maps
+
+# get pixel coordinates to predict to
+coords_pixel <- terra::xyFromCell(covariates$PfPR,
+                                  cell = terra::cells(covariates$PfPR))
+
+# get latent factors and design matrix
+latents_pixel <- project(latents_obs, coords_pixel)
+X_pixel <- build_design_matrix(covariates, coords_pixel)
+
+# predict SNP frequencies
+snp_freq_logit_pixel <- X_pixel %*% t(parameters$beta) +
+  t(parameters$loadings %*% t(latents_pixel))
+snp_freq_pixel <- ilogit(snp_freq_logit_pixel)
+
+# map from SNPs to Treatment Failure frequencies at these locations
+prob_fail_pixel <- sweep(snp_freq_pixel,
+                       MARGIN = 2,
+                       STATS = parameters$q,
+                       FUN = "*") 
+tf_freq_pixel <- 1 - apply(1 - prob_fail_pixel,
+                         MARGIN = 1,
+                         FUN = "prod")
+
+# compute posterior samples of the treatment failure
+post_pixel_sims <- calculate(tf_freq_pixel,
+                             values = draws,
+                             nsim = 100)
+
+# put the posterior mean of treatment failure in a raster, and plot alongside the 'truth'
+tf_freq_post_mean_pixel <- colMeans(post_pixel_sims$tf_freq_pixel[, , 1])
+
+tf_freq_post_mean <- covariates$PfPR * 0
+names(tf_freq_post_mean) <- "tf_freq_post_mean"
+tf_freq_post_mean[terra::cells(tf_freq_post_mean)] <- tf_freq_post_mean_pixel
+tf_freq_plot <- c(tf_freq_post_mean, sims$truth$tf_frequency)
+names(tf_freq_plot) <- c("Treatment failure (predicted)", "Treatment failure (truth)")
+plot(tf_freq_plot)
+```
+
+![](README_files/figure-gfm/fit%20greta%20model-1.png)<!-- -->

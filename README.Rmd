@@ -8,7 +8,7 @@ output: github_document
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
-  cache = TRUE
+  cache = FALSE
 )
 ```
 
@@ -157,7 +157,7 @@ parameters <- define_greta_parameters(n_snp = n_snp,
 # define Gaussian process for latent factors over SNP and TF locations
 
 # matern 5/2 isotropic kernel
-kernel_lengthscale <- lognormal(-3, 1)
+kernel_lengthscale <- normal(14, 1, truncation = c(0, Inf))
 kernel_sd <- normal(0, 1, truncation = c(0, Inf))
 kernel <- mat52(lengthscales = c(kernel_lengthscale, kernel_lengthscale),
                 variance = kernel_sd ^ 2)
@@ -199,11 +199,12 @@ distribution(tf_data$failed) <- greta::binomial(size = tf_data$treated,
                                                 prob = tf_freq_obs[tf_data_index])
 
 # fit the model
-attach(parameters, .GlobalEnv)
-m <- model(kernel_lengthscale, kernel_sd, q, beta, loadings)
+q <- parameters$q
+beta <- parameters$beta
+m <- model(kernel_lengthscale, kernel_sd, q, beta)
 draws <- mcmc(m)
 
-# check convergence
+# check convergence is not too horrible
 r_hats <- coda::gelman.diag(draws,
                             autoburnin = FALSE,
                             multivariate = FALSE)
@@ -211,5 +212,40 @@ summary(r_hats$psrf)
 
 # make posterior prediction maps
 
+# get pixel coordinates to predict to
+coords_pixel <- terra::xyFromCell(covariates$PfPR,
+                                  cell = terra::cells(covariates$PfPR))
 
+# get latent factors and design matrix
+latents_pixel <- project(latents_obs, coords_pixel)
+X_pixel <- build_design_matrix(covariates, coords_pixel)
+
+# predict SNP frequencies
+snp_freq_logit_pixel <- X_pixel %*% t(parameters$beta) +
+  t(parameters$loadings %*% t(latents_pixel))
+snp_freq_pixel <- ilogit(snp_freq_logit_pixel)
+
+# map from SNPs to Treatment Failure frequencies at these locations
+prob_fail_pixel <- sweep(snp_freq_pixel,
+                       MARGIN = 2,
+                       STATS = parameters$q,
+                       FUN = "*") 
+tf_freq_pixel <- 1 - apply(1 - prob_fail_pixel,
+                         MARGIN = 1,
+                         FUN = "prod")
+
+# compute posterior samples of the treatment failure
+post_pixel_sims <- calculate(tf_freq_pixel,
+                             values = draws,
+                             nsim = 100)
+
+# put the posterior mean of treatment failure in a raster, and plot alongside the 'truth'
+tf_freq_post_mean_pixel <- colMeans(post_pixel_sims$tf_freq_pixel[, , 1])
+
+tf_freq_post_mean <- covariates$PfPR * 0
+names(tf_freq_post_mean) <- "tf_freq_post_mean"
+tf_freq_post_mean[terra::cells(tf_freq_post_mean)] <- tf_freq_post_mean_pixel
+tf_freq_plot <- c(tf_freq_post_mean, sims$truth$tf_frequency)
+names(tf_freq_plot) <- c("Treatment failure (predicted)", "Treatment failure (truth)")
+plot(tf_freq_plot)
 ```

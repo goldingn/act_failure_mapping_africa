@@ -18,11 +18,11 @@
 #' @return
 #' @author Nick Golding
 #' @export
-sim_dataset <- function(n_snp = 10,
+sim_dataset <- function(n_snp = 8,
                         n_snp_obs = 100,
-                        snp_samples = 100,
-                        n_tf_obs = 100,
-                        tf_samples = 100,
+                        snp_samples = 50,
+                        n_tf_obs = 50,
+                        tf_samples = 30,
                         dim = c(100, 100),
                         n_latent = 3,
                         snp_biased = TRUE) {

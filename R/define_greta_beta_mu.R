@@ -7,6 +7,6 @@
 #' @author Nick Golding
 define_greta_beta_mu <- function() {
 
-  greta::normal(0, 3, dim = 3)
+  greta::normal(0, 1, dim = 3)
 
 }
