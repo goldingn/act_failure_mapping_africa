@@ -49,30 +49,32 @@ sim_dataset <- function(n_snp = 10,
   # calculate true treatment failure frequencies
   tf_frequency <- calculate_tf_frequency(snp_frequency = snp_frequency,
                                          parameters = parameters)
-  
-  # # simulate treatment failure data
-  # tf_data <- sim_tf_data(tf_frequency = tf_frequency,
-  #                        n_tf_obs = n_tf_obs,
-  #                        tf_samples = tf_samples)
-  # 
-  # # simulate SNP data (possibly biased to high TF areas)
-  # snp_data <- sim_snp_data(snp_frequency = snp_frequency,
-  #                          n_snp_obs = n_snp_obs,
-  #                          snp_samples = snp_samples)
-  # 
-  # # return all data and true values
-  # list(
-  #   data = list(
-  #     tf_data = tf_data,
-  #     snp_data = snp_data
-  #   ),
-  #   truth = list(
-  #     parameters = parameters,
-  #     covariates = covariates,
-  #     latent_factors = latent_factors,
-  #     snp_frequency = snp_frequency,
-  #     tf_frequency = tf_frequency
-  #   )
-  # )
+
+  # simulate treatment failure data
+  tf_data <- sim_tf_data(tf_frequency = tf_frequency,
+                         n_tf_obs = n_tf_obs,
+                         tf_samples = tf_samples)
+
+  # simulate SNP data (possibly biased to high TF areas)
+  snp_data <- sim_snp_data(snp_frequency = snp_frequency,
+                           tf_frequency = tf_frequency,
+                           n_snp_obs = n_snp_obs,
+                           snp_samples = snp_samples,
+                           snp_biased = snp_biased)
+
+  # return all data and true values
+  list(
+    data = list(
+      tf_data = tf_data,
+      snp_data = snp_data
+    ),
+    truth = list(
+      parameters = parameters,
+      covariates = covariates,
+      latent_factors = latent_factors,
+      snp_frequency = snp_frequency,
+      tf_frequency = tf_frequency
+    )
+  )
   
 }
