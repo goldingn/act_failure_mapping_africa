@@ -7,7 +7,8 @@ output: github_document
 ```{r, include = FALSE}
 knitr::opts_chunk$set(
   collapse = TRUE,
-  comment = "#>"
+  comment = "#>",
+  cache = TRUE
 )
 ```
 
@@ -83,3 +84,132 @@ If quantitative estimates of the associations between SNPs and treatment failure
 We assume that the spatial locations of data on SNP frequencies are spatially biased towards areas with higher frequencies of treatment failure - and therefore higher frequencies of resistance markers. This reflects the likely scenario that sequencing of parasites is often performed to investigate the (genetic) causes of observed (phenotypic) treatment failure. Failing to account for this would bias-up estimates of marker frequencies. We account and correct for this bias by simultaneously fitting to both spatial SNP and treatment failure datasets. The equation relating SNP frequencies to treatment failure probabilities ensures that low frequencies of treatment failure indicate low frequencies of resistance markers (when $P^\text{SNP}_{i,s}$ are close to zero, $P^\text{TF}_i$ must be close to zero), informing the model of these low-frequency regions and correcting the bias.
 
 We currently assume that the spatial locations of treatment failure data are not biased (within the study area) to areas of higher treatment failure. This assumption would be met if data were collected across the study area to accurately estimate the levels of treatment failure. Hoewver it would be violated if treatment failure data were collected as a by-product of sampling targeted towards high-failure-rate locations, e.g. to understand mechanisms of resistance. If we determine that the latter scenario is more likely, we could implement a preferential sampling model (after Diggle) to correct for this bias, by additionally modelling the spatial locations of treatment failure data as an inhomogenous Poisson point process, with intensity modelled as a monotonic increasing function of the modeled failure rate $P^\text{TF}_i$. This preferential sampling model would therefore interpret areas with fewer treatment failure datapoints as likely to have a lower probability of treatment failure; an assumption that may or may not reasonable.
+
+## Example
+
+Simulate and plot some synthetic data
+
+```{r load-all, include=FALSE}
+. <- lapply(list.files("R", full.names = TRUE), source)
+set.seed(2024-04-26)
+```
+
+```{r sim-dataset}
+library(tidyverse)
+library(terra)
+sims <- sim_dataset()
+
+# fake covariates
+plot(sims$data$covariates)
+
+# simulated treatment failure data
+sims$data$tf_data %>%
+  mutate(freq = failed / treated) %>%
+  ggplot(
+    aes(
+      x = x,
+      y = y,
+      alpha = freq,
+    )
+  ) +
+  geom_point(size = 5) +
+  theme_minimal()
+
+# simulated SNP data
+sims$data$snp_data %>%
+  mutate(freq = positive / tested) %>%
+  ggplot(
+    aes(
+      x = x,
+      y = y,
+      alpha = freq,
+      group = snp
+    )
+  ) +
+  geom_point(
+    size = 2
+  ) +
+  facet_wrap(~snp) +
+  theme_minimal()
+
+```
+```{r fit greta model}
+# fit the model to these data with greta
+library(greta)
+library(greta.gp)
+
+# get data and dimensions
+covariates <- sims$data$covariates
+tf_data <- sims$data$tf_data
+snp_data <- sims$data$snp_data
+n_snp <- n_distinct(snp_data$snp)
+n_latent <- terra::nlyr(sims$truth$latent_factors)
+
+# coordinates for two datasets combined
+coords <- sims$data$all_coords %>%
+  select(x, y) %>%
+  as.matrix()
+
+# define model parameters
+parameters <- define_greta_parameters(n_snp = n_snp,
+                                      n_latent = n_latent)
+
+# define Gaussian process for latent factors over SNP and TF locations
+
+# matern 5/2 isotropic kernel
+kernel_lengthscale <- lognormal(-3, 1)
+kernel_sd <- normal(0, 1, truncation = c(0, Inf))
+kernel <- mat52(lengthscales = c(kernel_lengthscale, kernel_lengthscale),
+                variance = kernel_sd ^ 2)
+
+# define knots for reduced-rank GP approximation
+kmn <- kmeans(coords, centers = 25)
+
+# define GPs over spatial latent factors, evaluated at all data locations
+latents_obs <- gp(x = coords,
+                  kernel = kernel,
+                  inducing = kmn$centers,
+                  n = n_latent)
+
+# extract out the design matrices (pre-scaled)
+X_obs <- build_design_matrix(covariates, coords)
+
+# combine these with parameters to get matrices SNP frequencies at the SNP data locations
+snp_freq_logit_obs <- X_obs %*% t(parameters$beta) +
+  t(parameters$loadings %*% t(latents_obs))
+snp_freq_obs <- ilogit(snp_freq_logit_obs)
+
+# map from SNPs to Treatment Failure frequencies at these locations
+prob_fail_obs <- sweep(snp_freq_obs,
+                       MARGIN = 2,
+                       STATS = parameters$q,
+                       FUN = "*") 
+tf_freq_obs <- 1 - apply(1 - prob_fail_obs,
+                         MARGIN = 1,
+                         FUN = "prod")
+
+# define the likelihood over the SNPs
+snp_data_index <- cbind(snp_data$coord_id, snp_data$snp_id)
+distribution(snp_data$positive) <- greta::binomial(size = snp_data$tested,
+                                                   prob = snp_freq_obs[snp_data_index])
+
+# and define the likelihood over the TF
+tf_data_index <- tf_data$coord_id
+distribution(tf_data$failed) <- greta::binomial(size = tf_data$treated,
+                                                prob = tf_freq_obs[tf_data_index])
+
+# fit the model
+attach(parameters, .GlobalEnv)
+m <- model(kernel_lengthscale, kernel_sd, q, beta, loadings)
+draws <- mcmc(m)
+
+# check convergence
+r_hats <- coda::gelman.diag(draws,
+                            autoburnin = FALSE,
+                            multivariate = FALSE)
+summary(r_hats$psrf)
+
+# make posterior prediction maps
+
+
+```

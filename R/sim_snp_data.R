@@ -39,8 +39,11 @@ sim_snp_data <- function(snp_frequency,
     bind_cols(snp_freq_mat) %>%
     pivot_longer(
       cols = starts_with("snp_"),
-      names_to = "SNP",
+      names_to = "snp",
       values_to = "frequency"
+    ) %>%
+    mutate(
+      snp_id = match(snp, unique(snp))
     ) %>%
     mutate(
       tested = snp_samples

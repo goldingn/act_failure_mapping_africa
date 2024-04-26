@@ -14,16 +14,13 @@ calculate_snp_frequency <- function(latent_factors,
                                     covariates,
                                     parameters) {
 
-  # Extract the latent factors and covariates into matrices of non-missing
-  # values
-  cell_ids <- terra::cells(latent_factors)
-
-  # epsilon matrix  
-  latents <- terra::extract(latent_factors, cell_ids)
   
-  # design matrix
-  covs <- terra::extract(covariates, cell_ids)
-  X <- cbind(1, as.matrix(covs))
+  # Build the design matrix over all cells
+  X <- build_design_matrix(covariates)
+  
+  # Extract the epsilon matrix values
+  cell_ids <- terra::cells(latent_factors)
+  latents <- terra::extract(latent_factors, cell_ids)
   
   # combine these with parameters to get matrix of logit SNP frequencies
   logit_snp_freq_mat <- X %*% t(parameters$beta) +
@@ -38,7 +35,7 @@ calculate_snp_frequency <- function(latent_factors,
   }
 
   # convert to frequency scale and return
-  snp_frequency <- app(logit_snp_frequency, plogis)
+  snp_frequency <- terra::app(logit_snp_frequency, plogis)
   snp_frequency
 
 }

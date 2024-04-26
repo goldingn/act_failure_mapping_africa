@@ -62,15 +62,44 @@ sim_dataset <- function(n_snp = 10,
                            snp_samples = snp_samples,
                            snp_biased = snp_biased)
 
+  # tidy up the data to have unique spatial codes
+  all_coords <- bind_rows(
+    snp_data %>%
+      select(x, y),
+    tf_data %>%
+      select(x, y)
+  ) %>%
+    distinct() %>%
+    mutate(
+      coord_id = row_number(),
+      .before = everything())
+
+  # add back into SNP data
+  snp_data <- snp_data %>%
+    left_join(
+      all_coords,
+      by = c("x", "y")) %>%
+    relocate(coord_id,
+             .after = y)
+  
+  # and add back into TF data
+  tf_data <- tf_data %>%
+    left_join(
+      all_coords,
+      by = c("x", "y")) %>%
+    relocate(coord_id,
+             .after = y)
+  
   # return all data and true values
   list(
     data = list(
       tf_data = tf_data,
-      snp_data = snp_data
+      snp_data = snp_data,
+      all_coords = all_coords,
+      covariates = covariates
     ),
     truth = list(
       parameters = parameters,
-      covariates = covariates,
       latent_factors = latent_factors,
       snp_frequency = snp_frequency,
       tf_frequency = tf_frequency

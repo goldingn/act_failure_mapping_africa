@@ -188,3 +188,59 @@ $P^\text{TF}_i$. This preferential sampling model would therefore
 interpret areas with fewer treatment failure datapoints as likely to
 have a lower probability of treatment failure; an assumption that may or
 may not reasonable.
+
+## Example
+
+Simulate and plot some synthetic data
+
+``` r
+library(tidyverse)
+library(terra)
+sims <- sim_dataset()
+#> ℹ Initialising python and checking dependencies, this may take a moment.✔ Initialising python and checking dependencies ... done!               
+
+# fake covariates
+plot(sims$data$covariates)
+```
+
+![](README_files/figure-gfm/sim-dataset-1.png)<!-- -->
+
+``` r
+
+# simulated treatment failure data
+sims$data$tf_data %>%
+  mutate(freq = failed / treated) %>%
+  ggplot(
+    aes(
+      x = x,
+      y = y,
+      alpha = freq,
+    )
+  ) +
+  geom_point(size = 5) +
+  theme_minimal()
+```
+
+![](README_files/figure-gfm/sim-dataset-2.png)<!-- -->
+
+``` r
+
+# simulated SNP data
+sims$data$snp_data %>%
+  mutate(freq = positive / tested) %>%
+  ggplot(
+    aes(
+      x = x,
+      y = y,
+      alpha = freq,
+      group = snp
+    )
+  ) +
+  geom_point(
+    size = 2
+  ) +
+  facet_wrap(~snp) +
+  theme_minimal()
+```
+
+![](README_files/figure-gfm/sim-dataset-3.png)<!-- -->
