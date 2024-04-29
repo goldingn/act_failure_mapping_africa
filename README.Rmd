@@ -23,37 +23,44 @@ This is currently only a very early prototype. The aim of this analysis is to us
 
 ## Model
 
-The following model is used to simulate a synthetic dataset for model testing, and will be implemented as a Bayesian statsitical model to estimate parameters and predict the prevalence of resistance markers and phenotypes in $P.falciparum* parasites sampled from malaria cases.
+The following model is used to simulate a synthetic dataset for model testing, and will be implemented as a Bayesian statsitical model to estimate parameters and predict the prevalence of resistance markers and phenotypes in *P. falciparum* parasites sampled from malaria cases.
 
-The number of failed treatments $F_{i}$ in spatial location (pixel) $i$ is Binomial, with number of attempted treatments $T_{i}$, and per-case probability (frequency) of treatment failure $P^{TF}_i$:
+The number of failed treatments $`F_{i}`$ in spatial location (pixel) $i$ is Binomial, with number of attempted treatments $`T_{i}`$, and per-case probability (frequency) of treatment failure $`P_i^\mathrm{TF}`$:
 
-$$
-F_{i} \sim Binomial(T_{i}, P^\text{TF}_i)
-$$
-The overall probability of treatment failure is calculated from the individual (ie. conditionally-independent) probabilities of failure due to each of $S$ different resistance markers (SNPs) $s$, computed as the product of the probability of treatment failure $q^{TF}_{i,s}$ *if* SNP $s$ if present, multiplied by the probability (frequency) $P^{SNP}_{i,s}$ that SNP $s$ is present in a randomly sampled parasite in pixel $i$ :
+```math
+F_{i} \sim \mathrm{Binomial}(T_{i}, P_i^\mathrm{TF})
+```
 
-$$
-P^\text{TF}_i = 1- \prod_{s=1}^S{1 - q^\text{TF}_{i,s} P^\text{SNP}_{i,s}}
-$$
-We additionally model observations of the number of samples positive for each of these SNPs $\text{SNP}^{+}_{i,s}$ at each pixel $i$ via a Binomial likelihood of the number of samples tested for this SNP $\text{SNP}_{i,s}$ and the population frequency $P^\text{SNP}_{i,s}$ of the SNP in pixel $i$ :
-$$
-\text{SNP}^{+}_{i,s} \sim Binomial(\text{SNP}_{i,s}, P^\text{SNP}_{i,s})
-$$
-The frequencies of the vector of SNPs $P^\text{SNP}_{i}$ at each pixel $i$ is jointly modelled as the outcome of a random-slopes, latent factor model-based geostatistical model with logit link function:
+The overall probability of treatment failure is calculated from the individual (ie. conditionally-independent) probabilities of failure due to each of $S$ different resistance markers (SNPs) $s$, computed as the product of the probability of treatment failure $`q_{i,s}`$ if SNP $s$ if present, multiplied by the probability (frequency) $`P_{i,s}^\mathrm{SNP}`$ that SNP $s$ is present in a randomly sampled parasite in pixel $i$ :
 
-$$
-\text{logit}(P^\text{SNP}_{i,s}) = \mathbf{X}_i \beta_s + \sum_{l=1}^{L}\Lambda_{s,l} \epsilon_{i,l} \\
-\beta_{s,k} \sim N(\mu_k, \sigma^{2}_k)
-$$
-where $\mathbf{X}$ is a design matrix of $K$ observed spatial covariates of SNP frequencies (including a dummy column for an intercept term), with the vector $\mathbf{X}_i$ representing the covariates values at location (pixel) $i$, and $\beta_s$ is corresponding vector of $K$ regression coefficients for SNP $s$, each element $k$ of which is drawn from a hierarchical distribution (random slopes model), with average coefficient across all SNPs $\mu_k$, and between-SNP variance $\sigma^{2}_k$. This enables us to capture the similar-but-different relationships between the spatial covariates and each SNPs. 
+```math
+P_i^\mathrm{TF} = 1 - \prod_{s=1}^S{1 - q_{i,s} P_{i,s}^\mathrm{SNP}}
+```
 
-In addition to these covariate effects, additional spatial structure is modelled via $L$ vectors of latent spatial factors $\epsilon_l$, each SNP $s$ having loading coefficients $\Lambda_{s,l}$ against each one of these latent factor $l$. By setting $L<S$, this latent factor modelling approach enables us to parsimoniously model each SNP as having a separate spatial random effect, but with correlation between the residual spatial patterns of each SNP, reflecting their shared (unobserved) drivers. The number of latent factors $L$ is a modelling choice that can be determined by model criticism;  by determining how varied the different SNP patterns need to be (the minimum number of latent factors required) to explain the data reasonably well.
+We additionally model observations of the number of samples positive for each of these SNPs $`\mathrm{SNP}_{i,s}^{+}`$ at each pixel $i$ via a Binomial likelihood of the number of samples tested for this SNP $`\mathrm{SNP}_{i,s}`$ and the population frequency $`P_{i,s}^\mathrm{SNP}`$ of the SNP in pixel $i$:
+
+```math
+\mathrm{SNP}_{i,s}^{+} \sim \mathrm{Binomial}(\mathrm{SNP}_{i,s} P_{i,s}^\mathrm{SNP})
+```
+
+The frequencies of the vector of SNPs $`P_{i}^\mathrm{SNP}`$ at each pixel $i$ is jointly modelled as the outcome of a random-slopes, latent factor model-based geostatistical model with logit link function:
+
+```math
+\mathrm{logit}(P_{i,s}^\mathrm{SNP}) = \mathbf{X}_i \beta_s + \sum_{l=1}^{L}\Lambda_{s,l} \epsilon_{i,l}
+```
+```math
+\beta_{s,k} \sim \mathrm{N}(\mu_k, \sigma_k^{2})
+```
+
+where $\mathbf{X}$ is a design matrix of $K$ observed spatial covariates of SNP frequencies (including a dummy column for an intercept term), with the vector $`\mathbf{X}_i`$ representing the covariates values at location (pixel) $i$, and $`\beta_s`$ is the corresponding vector of $K$ regression coefficients for SNP $s$, each element $k$ of which is drawn from a hierarchical distribution (random slopes model), with average coefficient across all SNPs $`\mu_k`$, and between-SNP variance $`\sigma_k^{2}`$. This enables us to capture the similar-but-different relationships between the spatial covariates and each SNPs. 
+
+In addition to these covariate effects, additional spatial structure is modelled via $L$ vectors of latent spatial factors $`\epsilon_l`$, each SNP $s$ having loading coefficients $`\Lambda_{s,l}`$ against each one of these latent factor $l$. By setting $L \lt S$, this latent factor modelling approach enables us to parsimoniously model each SNP as having a separate spatial random effect, but with correlation between the residual spatial patterns of each SNP, reflecting their shared (unobserved) drivers. The number of latent factors $L$ is a modelling choice that can be determined by model criticism;  by determining how varied the different SNP patterns need to be (the minimum number of latent factors required) to explain the data reasonably well.
 
 Finally, we model each of the spatial latent factors as an independent zero-mean Gaussian spatial process, with covariance matrix $K$, shared across all spatial latent factors:
 
-$$
-\epsilon_{s} \sim \text{GP}(\mathbf{0}, K)
-$$
+```math
+\epsilon_{s} \sim \mathrm{GP}(\mathbf{0}, K)
+```
 
 ## Covariates
 
@@ -65,7 +72,7 @@ We will consider a range of priors for model parameters when fitting the model, 
 
 ### Mapping from SNPs to treatment failure
 
-A number of options are available to construct a prior over the probability of treatment failure, conditional on SNP presence $q^\text{TF}_{i,s}$, and these depend on the level of pre-filtering of relevant SNPs to model, and the availability of external information to inform the model.
+A number of options are available to construct a prior over the probability of treatment failure, conditional on SNP presence $`q_{i,s}`$, and these depend on the level of pre-filtering of relevant SNPs to model, and the availability of external information to inform the model.
 
 #### GWAS prior
 
@@ -81,22 +88,26 @@ If quantitative estimates of the associations between SNPs and treatment failure
 
 ## Preferential sampling
 
-We assume that the spatial locations of data on SNP frequencies are spatially biased towards areas with higher frequencies of treatment failure - and therefore higher frequencies of resistance markers. This reflects the likely scenario that sequencing of parasites is often performed to investigate the (genetic) causes of observed (phenotypic) treatment failure. Failing to account for this would bias-up estimates of marker frequencies. We account and correct for this bias by simultaneously fitting to both spatial SNP and treatment failure datasets. The equation relating SNP frequencies to treatment failure probabilities ensures that low frequencies of treatment failure indicate low frequencies of resistance markers (when $P^\text{SNP}_{i,s}$ are close to zero, $P^\text{TF}_i$ must be close to zero), informing the model of these low-frequency regions and correcting the bias.
+We assume that the spatial locations of data on SNP frequencies are spatially biased towards areas with higher frequencies of treatment failure - and therefore higher frequencies of resistance markers. This reflects the likely scenario that sequencing of parasites is often performed to investigate the (genetic) causes of observed (phenotypic) treatment failure. Failing to account for this would bias-up estimates of marker frequencies. We account and correct for this bias by simultaneously fitting to both spatial SNP and treatment failure datasets. The equation relating SNP frequencies to treatment failure probabilities ensures that low frequencies of treatment failure indicate low frequencies of resistance markers (when $`P_{i,s}^\mathrm{SNP}`$ are close to zero, $`P_i^\mathrm{TF}`$ must be close to zero), informing the model of these low-frequency regions and correcting the bias.
 
-We currently assume that the spatial locations of treatment failure data are not biased (within the study area) to areas of higher treatment failure. This assumption would be met if data were collected across the study area to accurately estimate the levels of treatment failure. Hoewver it would be violated if treatment failure data were collected as a by-product of sampling targeted towards high-failure-rate locations, e.g. to understand mechanisms of resistance. If we determine that the latter scenario is more likely, we could implement a preferential sampling model (after Diggle) to correct for this bias, by additionally modelling the spatial locations of treatment failure data as an inhomogenous Poisson point process, with intensity modelled as a monotonic increasing function of the modeled failure rate $P^\text{TF}_i$. This preferential sampling model would therefore interpret areas with fewer treatment failure datapoints as likely to have a lower probability of treatment failure; an assumption that may or may not reasonable.
+We currently assume that the spatial locations of treatment failure data are not biased (within the study area) to areas of higher treatment failure. This assumption would be met if data were collected across the study area to accurately estimate the levels of treatment failure. Hoewver it would be violated if treatment failure data were collected as a by-product of sampling targeted towards high-failure-rate locations, e.g. to understand mechanisms of resistance. If we determine that the latter scenario is more likely, we could implement a preferential sampling model (after Diggle) to correct for this bias, by additionally modelling the spatial locations of treatment failure data as an inhomogenous Poisson point process, with intensity modelled as a monotonic increasing function of the modeled failure rate $`P_i^\mathrm{TF}`$. This preferential sampling model would therefore interpret areas with fewer treatment failure datapoints as likely to have a lower probability of treatment failure; an assumption that may or may not reasonable.
 
 ## Example
 
 Simulate and plot some synthetic data
 
-```{r load-all, include=FALSE}
+```{r load-all, echo=TRUE, message=FALSE, warning=FALSE}
 . <- lapply(list.files("R", full.names = TRUE), source)
 set.seed(2024-04-26)
 ```
 
-```{r sim-dataset}
+```{r load-packages, echo=TRUE, message=FALSE, warning=FALSE}
 library(tidyverse)
 library(terra)
+library(tidyterra)
+```
+
+```{r sim-dataset}
 sims <- sim_dataset()
 
 # fake covariates
@@ -109,11 +120,19 @@ sims$data$tf_data %>%
     aes(
       x = x,
       y = y,
-      alpha = freq,
+      colour = freq,
     )
   ) +
-  geom_point(size = 5) +
-  theme_minimal()
+  geom_spatraster(
+    data = sims$data$covariates$PfPR * 0
+  ) +
+  scale_fill_continuous(na.value = "white",
+                        guide = "none") +
+  geom_point(size = 4) +
+  scale_colour_distiller(palette = "YlOrRd",
+                         direction = 1) +
+  theme_minimal() +
+  theme(aspect.ratio = 1)
 
 # simulated SNP data
 sims$data$snp_data %>%
@@ -122,18 +141,24 @@ sims$data$snp_data %>%
     aes(
       x = x,
       y = y,
-      alpha = freq,
+      colour = freq,
       group = snp
     )
   ) +
-  geom_point(
-    size = 2
+    geom_spatraster(
+    data = sims$data$covariates$PfPR * 0
   ) +
+  scale_fill_continuous(na.value = "white",
+                        guide = "none") +
+  geom_point() +
+  scale_colour_distiller(palette = "YlOrRd",
+                         direction = 1) +
   facet_wrap(~snp) +
-  theme_minimal()
+  theme_minimal() +
+  theme(aspect.ratio = 1)
 
 ```
-```{r fit greta model}
+```{r fit greta model, message=FALSE, warning=FALSE}
 # fit the model to these data with greta
 library(greta)
 library(greta.gp)

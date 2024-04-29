@@ -23,53 +23,67 @@ genetic resistance.
 The following model is used to simulate a synthetic dataset for model
 testing, and will be implemented as a Bayesian statsitical model to
 estimate parameters and predict the prevalence of resistance markers and
-phenotypes in \$P.falciparum\* parasites sampled from malaria cases.
+phenotypes in *P. falciparum* parasites sampled from malaria cases.
 
-The number of failed treatments $F_{i}$ in spatial location (pixel) $i$
-is Binomial, with number of attempted treatments $T_{i}$, and per-case
-probability (frequency) of treatment failure $P^{TF}_i$:
+The number of failed treatments $`F_{i}`$ in spatial location (pixel)
+$i$ is Binomial, with number of attempted treatments $`T_{i}`$, and
+per-case probability (frequency) of treatment failure
+$`P_i^\mathrm{TF}`$:
 
-$$
-F_{i} \sim Binomial(T_{i}, P^\text{TF}_i)
-$$ The overall probability of treatment failure is calculated from the
+``` math
+F_{i} \sim \mathrm{Binomial}(T_{i}, P_i^\mathrm{TF})
+```
+
+The overall probability of treatment failure is calculated from the
 individual (ie. conditionally-independent) probabilities of failure due
 to each of $S$ different resistance markers (SNPs) $s$, computed as the
-product of the probability of treatment failure $q^{TF}_{i,s}$ *if* SNP
-$s$ if present, multiplied by the probability (frequency)
-$P^{SNP}_{i,s}$ that SNP $s$ is present in a randomly sampled parasite
-in pixel $i$ :
+product of the probability of treatment failure $`q_{i,s}`$ if SNP $s$
+if present, multiplied by the probability (frequency)
+$`P_{i,s}^\mathrm{SNP}`$ that SNP $s$ is present in a randomly sampled
+parasite in pixel $i$ :
 
-$$
-P^\text{TF}_i = 1- \prod_{s=1}^S{1 - q^\text{TF}_{i,s} P^\text{SNP}_{i,s}}
-$$ We additionally model observations of the number of samples positive
-for each of these SNPs $\text{SNP}^{+}_{i,s}$ at each pixel $i$ via a
+``` math
+P_i^\mathrm{TF} = 1 - \prod_{s=1}^S{1 - q_{i,s} P_{i,s}^\mathrm{SNP}}
+```
+
+We additionally model observations of the number of samples positive for
+each of these SNPs $`\mathrm{SNP}_{i,s}^{+}`$ at each pixel $i$ via a
 Binomial likelihood of the number of samples tested for this SNP
-$\text{SNP}_{i,s}$ and the population frequency $P^\text{SNP}_{i,s}$ of
-the SNP in pixel $i$ : $$
-\text{SNP}^{+}_{i,s} \sim Binomial(\text{SNP}_{i,s}, P^\text{SNP}_{i,s})
-$$ The frequencies of the vector of SNPs $P^\text{SNP}_{i}$ at each
+$`\mathrm{SNP}_{i,s}`$ and the population frequency
+$`P_{i,s}^\mathrm{SNP}`$ of the SNP in pixel $i$:
+
+``` math
+\mathrm{SNP}_{i,s}^{+} \sim \mathrm{Binomial}(\mathrm{SNP}_{i,s} P_{i,s}^\mathrm{SNP})
+```
+
+The frequencies of the vector of SNPs $`P_{i}^\mathrm{SNP}`$ at each
 pixel $i$ is jointly modelled as the outcome of a random-slopes, latent
 factor model-based geostatistical model with logit link function:
 
-$$
-\text{logit}(P^\text{SNP}_{i,s}) = \mathbf{X}_i \beta_s + \sum_{l=1}^{L}\Lambda_{s,l} \epsilon_{i,l} \\
-\beta_{s,k} \sim N(\mu_k, \sigma^{2}_k)
-$$ where $\mathbf{X}$ is a design matrix of $K$ observed spatial
-covariates of SNP frequencies (including a dummy column for an intercept
-term), with the vector $\mathbf{X}_i$ representing the covariates values
-at location (pixel) $i$, and $\beta_s$ is corresponding vector of $K$
+``` math
+\mathrm{logit}(P_{i,s}^\mathrm{SNP}) = \mathbf{X}_i \beta_s + \sum_{l=1}^{L}\Lambda_{s,l} \epsilon_{i,l}
+```
+
+``` math
+\beta_{s,k} \sim \mathrm{N}(\mu_k, \sigma_k^{2})
+```
+
+where $\mathbf{X}$ is a design matrix of $K$ observed spatial covariates
+of SNP frequencies (including a dummy column for an intercept term),
+with the vector $`\mathbf{X}_i`$ representing the covariates values at
+location (pixel) $i$, and $`\beta_s`$ is the corresponding vector of $K$
 regression coefficients for SNP $s$, each element $k$ of which is drawn
 from a hierarchical distribution (random slopes model), with average
-coefficient across all SNPs $\mu_k$, and between-SNP variance
-$\sigma^{2}_k$. This enables us to capture the similar-but-different
+coefficient across all SNPs $`\mu_k`$, and between-SNP variance
+$`\sigma_k^{2}`$. This enables us to capture the similar-but-different
 relationships between the spatial covariates and each SNPs.
 
 In addition to these covariate effects, additional spatial structure is
-modelled via $L$ vectors of latent spatial factors $\epsilon_l$, each
-SNP $s$ having loading coefficients $\Lambda_{s,l}$ against each one of
-these latent factor $l$. By setting $L<S$, this latent factor modelling
-approach enables us to parsimoniously model each SNP as having a
-separate spatial random effect, but with correlation between the
+modelled via $L$ vectors of latent spatial factors $`\epsilon_l`$, each
+SNP $s$ having loading coefficients $`\Lambda_{s,l}`$ against each one
+of these latent factor $l$. By setting $L \lt S$, this latent factor
+modelling approach enables us to parsimoniously model each SNP as having
+a separate spatial random effect, but with correlation between the
 residual spatial patterns of each SNP, reflecting their shared
 (unobserved) drivers. The number of latent factors $L$ is a modelling
 choice that can be determined by model criticism; by determining how
@@ -80,9 +94,9 @@ Finally, we model each of the spatial latent factors as an independent
 zero-mean Gaussian spatial process, with covariance matrix $K$, shared
 across all spatial latent factors:
 
-$$
-\epsilon_{s} \sim \text{GP}(\mathbf{0}, K)
-$$
+``` math
+\epsilon_{s} \sim \mathrm{GP}(\mathbf{0}, K)
+```
 
 ## Covariates
 
@@ -115,9 +129,9 @@ prior and posterior predictive checks.
 
 A number of options are available to construct a prior over the
 probability of treatment failure, conditional on SNP presence
-$q^\text{TF}_{i,s}$, and these depend on the level of pre-filtering of
-relevant SNPs to model, and the availability of external information to
-inform the model.
+$`q_{i,s}`$, and these depend on the level of pre-filtering of relevant
+SNPs to model, and the availability of external information to inform
+the model.
 
 #### GWAS prior
 
@@ -168,8 +182,8 @@ of marker frequencies. We account and correct for this bias by
 simultaneously fitting to both spatial SNP and treatment failure
 datasets. The equation relating SNP frequencies to treatment failure
 probabilities ensures that low frequencies of treatment failure indicate
-low frequencies of resistance markers (when $P^\text{SNP}_{i,s}$ are
-close to zero, $P^\text{TF}_i$ must be close to zero), informing the
+low frequencies of resistance markers (when $`P_{i,s}^\mathrm{SNP}`$ are
+close to zero, $`P_i^\mathrm{TF}`$ must be close to zero), informing the
 model of these low-frequency regions and correcting the bias.
 
 We currently assume that the spatial locations of treatment failure data
@@ -184,7 +198,7 @@ sampling model (after Diggle) to correct for this bias, by additionally
 modelling the spatial locations of treatment failure data as an
 inhomogenous Poisson point process, with intensity modelled as a
 monotonic increasing function of the modeled failure rate
-$P^\text{TF}_i$. This preferential sampling model would therefore
+$`P_i^\mathrm{TF}`$. This preferential sampling model would therefore
 interpret areas with fewer treatment failure datapoints as likely to
 have a lower probability of treatment failure; an assumption that may or
 may not reasonable.
@@ -194,29 +208,17 @@ may not reasonable.
 Simulate and plot some synthetic data
 
 ``` r
+. <- lapply(list.files("R", full.names = TRUE), source)
+set.seed(2024-04-26)
+```
+
+``` r
 library(tidyverse)
-#> Warning: package 'ggplot2' was built under R version 4.2.3
-#> Warning: package 'tidyr' was built under R version 4.2.3
-#> Warning: package 'dplyr' was built under R version 4.2.3
-#> ── Attaching core tidyverse packages ──────────────────────── tidyverse 2.0.0 ──
-#> ✔ dplyr     1.1.4     ✔ readr     2.1.4
-#> ✔ forcats   1.0.0     ✔ stringr   1.5.0
-#> ✔ ggplot2   3.5.0     ✔ tibble    3.2.1
-#> ✔ lubridate 1.9.2     ✔ tidyr     1.3.1
-#> ✔ purrr     1.0.2     
-#> ── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
-#> ✖ dplyr::filter() masks stats::filter()
-#> ✖ dplyr::lag()    masks stats::lag()
-#> ℹ Use the conflicted package (<http://conflicted.r-lib.org/>) to force all conflicts to become errors
 library(terra)
-#> Warning: package 'terra' was built under R version 4.2.3
-#> terra 1.7.71
-#> 
-#> Attaching package: 'terra'
-#> 
-#> The following object is masked from 'package:tidyr':
-#> 
-#>     extract
+library(tidyterra)
+```
+
+``` r
 sims <- sim_dataset()
 #> ℹ Initialising python and checking dependencies, this may take a moment.✔ Initialising python and checking dependencies ... done!               
 
@@ -235,11 +237,19 @@ sims$data$tf_data %>%
     aes(
       x = x,
       y = y,
-      alpha = freq,
+      colour = freq,
     )
   ) +
-  geom_point(size = 5) +
-  theme_minimal()
+  geom_spatraster(
+    data = sims$data$covariates$PfPR * 0
+  ) +
+  scale_fill_continuous(na.value = "white",
+                        guide = "none") +
+  geom_point(size = 4) +
+  scale_colour_distiller(palette = "YlOrRd",
+                         direction = 1) +
+  theme_minimal() +
+  theme(aspect.ratio = 1)
 ```
 
 ![](README_files/figure-gfm/sim-dataset-2.png)<!-- -->
@@ -253,15 +263,21 @@ sims$data$snp_data %>%
     aes(
       x = x,
       y = y,
-      alpha = freq,
+      colour = freq,
       group = snp
     )
   ) +
-  geom_point(
-    size = 2
+    geom_spatraster(
+    data = sims$data$covariates$PfPR * 0
   ) +
+  scale_fill_continuous(na.value = "white",
+                        guide = "none") +
+  geom_point() +
+  scale_colour_distiller(palette = "YlOrRd",
+                         direction = 1) +
   facet_wrap(~snp) +
-  theme_minimal()
+  theme_minimal() +
+  theme(aspect.ratio = 1)
 ```
 
 ![](README_files/figure-gfm/sim-dataset-3.png)<!-- -->
@@ -269,25 +285,7 @@ sims$data$snp_data %>%
 ``` r
 # fit the model to these data with greta
 library(greta)
-#> 
-#> Attaching package: 'greta'
-#> The following object is masked from 'package:dplyr':
-#> 
-#>     slice
-#> The following objects are masked from 'package:stats':
-#> 
-#>     binomial, cov2cor, poisson
-#> The following objects are masked from 'package:base':
-#> 
-#>     %*%, apply, backsolve, beta, chol2inv, colMeans, colSums, diag,
-#>     eigen, forwardsolve, gamma, identity, rowMeans, rowSums, sweep,
-#>     tapply
 library(greta.gp)
-#> 
-#> Attaching package: 'greta.gp'
-#> The following object is masked from 'package:terra':
-#> 
-#>     project
 
 # get data and dimensions
 covariates <- sims$data$covariates
@@ -354,10 +352,6 @@ q <- parameters$q
 beta <- parameters$beta
 m <- model(kernel_lengthscale, kernel_sd, q, beta)
 draws <- mcmc(m)
-#> running 4 chains simultaneously on up to 8 CPU cores
-#> 
-#>     warmup                                           0/1000 | eta:  ?s              warmup ==                                       50/1000 | eta:  1m              warmup ====                                    100/1000 | eta:  1m              warmup ======                                  150/1000 | eta: 40s              warmup ========                                200/1000 | eta: 34s              warmup ==========                              250/1000 | eta: 29s              warmup ===========                             300/1000 | eta: 26s              warmup =============                           350/1000 | eta: 23s              warmup ===============                         400/1000 | eta: 20s              warmup =================                       450/1000 | eta: 18s | <1% bad    warmup ===================                     500/1000 | eta: 16s | <1% bad    warmup =====================                   550/1000 | eta: 14s | <1% bad    warmup =======================                 600/1000 | eta: 13s | <1% bad    warmup =========================               650/1000 | eta: 11s | <1% bad    warmup ===========================             700/1000 | eta:  9s | <1% bad    warmup ============================            750/1000 | eta:  8s | <1% bad    warmup ==============================          800/1000 | eta:  6s | <1% bad    warmup ================================        850/1000 | eta:  5s | <1% bad    warmup ==================================      900/1000 | eta:  3s | <1% bad    warmup ====================================    950/1000 | eta:  1s | <1% bad    warmup ====================================== 1000/1000 | eta:  0s | <1% bad
-#>   sampling                                           0/1000 | eta:  ?s            sampling ==                                       50/1000 | eta: 18s            sampling ====                                    100/1000 | eta: 19s            sampling ======                                  150/1000 | eta: 23s            sampling ========                                200/1000 | eta: 22s            sampling ==========                              250/1000 | eta: 20s            sampling ===========                             300/1000 | eta: 19s            sampling =============                           350/1000 | eta: 17s            sampling ===============                         400/1000 | eta: 17s            sampling =================                       450/1000 | eta: 15s            sampling ===================                     500/1000 | eta: 13s            sampling =====================                   550/1000 | eta: 12s            sampling =======================                 600/1000 | eta: 10s            sampling =========================               650/1000 | eta:  9s            sampling ===========================             700/1000 | eta:  8s            sampling ============================            750/1000 | eta:  7s            sampling ==============================          800/1000 | eta:  5s            sampling ================================        850/1000 | eta:  4s            sampling ==================================      900/1000 | eta:  3s            sampling ====================================    950/1000 | eta:  1s            sampling ====================================== 1000/1000 | eta:  0s
 
 # check convergence is not too horrible
 r_hats <- coda::gelman.diag(draws,
